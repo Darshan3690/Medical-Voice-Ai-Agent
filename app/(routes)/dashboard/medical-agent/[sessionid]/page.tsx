@@ -1,11 +1,8 @@
-// page.tsx
 "use client";
-import { useParams, useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Doctor } from "../../_components/DoctorACard"; // Adjust path as necessary
 import { Circle, Loader, PhoneCall, PhoneOff } from 'lucide-react';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button'; // Adjust path as necessary
 import Vapi from '@vapi-ai/web';
 import { toast } from 'sonner';
@@ -28,11 +25,7 @@ type Message = {
 };
 
 function MedicalVoiceAgent() {
-  const router = useRouter();
-  // Correctly extract the lowercase 'sessionid' from URL parameters.
-  const params = useParams();
-  const sessionId = Array.isArray(params.sessionid) ? params.sessionid[0] : params.sessionid;
-
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
   const [callStarted, setCallStarted] = useState(false);
   const [vapiInstance, setVapiInstance] = useState<any>(null);
@@ -47,6 +40,20 @@ function MedicalVoiceAgent() {
   const sessionDetailRef = useRef<SessionDetail | null>(null);
   const messagesRef = useRef<Message[]>([]);
 
+  useEffect(() => {
+    // This effect runs on the client side after the component mounts
+    // to extract the session ID from the URL pathname.
+    if (typeof window !== 'undefined') {
+        const pathParts = window.location.pathname.split('/');
+        const id = pathParts[pathParts.length - 1];
+        if (id) {
+            setSessionId(id);
+        } else {
+            console.warn("⚠️ Could not extract session ID from URL.");
+            setLoading(false);
+        }
+    }
+  }, []); // Empty dependency array ensures this runs only once on mount.
 
   useEffect(() => {
     sessionDetailRef.current = sessionDetail;
@@ -67,7 +74,6 @@ function MedicalVoiceAgent() {
       GetSessionDetails();
     } else {
       // If no sessionId, stop loading and show an error state.
-      setLoading(false);
       console.warn("⚠️ No session ID found in URL.");
     }
   }, [sessionId]);
@@ -115,13 +121,14 @@ function MedicalVoiceAgent() {
 
     const agentPromptContent = sessionDetail.selectedDoctor.agentPrompt || "You are a helpful AI medical assistant.";
 
-    const VapiAgentConfig = { // This config isn't directly used in vapi.start() below, ensure it's for reference or if you intend to pass it.
+    // Type as 'any' since CreateAssistantDTO is not exported from the package
+    const VapiAgentConfig: any = {
       name: 'AI Medical Doctor Voice Agent',
       firstMessage: "Hello! I’m your AI medical assistant. Tell me about your symptoms.",
-  transcriber: {
-  provider: 'assemblyai',
-  language: 'en'
-} as { provider: 'assemblyai'; language: string },
+      transcriber: {
+        provider: 'assemblyai',
+        language: 'en'
+      },
       voice: {
         provider: 'playht',
         voiceId: sessionDetail.selectedDoctor.voiceId,
@@ -139,7 +146,7 @@ function MedicalVoiceAgent() {
     };
 
     setLoading(true);
-    // Ensure NEXT_PUBLIC_VAPI_VOICE_ASSISTANT_ID is correctly set and is an Assistant ID, not a room ID.
+    // Start the call by passing the assistant configuration object.
     vapi.start(VapiAgentConfig);
 
     vapi.on('call-start', () => {
@@ -154,7 +161,7 @@ function MedicalVoiceAgent() {
     vapi.on('call-end', async () => {
       console.log("Vapi Call Ended!");
       vapi.stop();
-       if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
 
       const currentMessages = messagesRef.current;
       const currentDetail = sessionDetailRef.current;
@@ -162,10 +169,10 @@ function MedicalVoiceAgent() {
       if (currentMessages.length && currentDetail && sessionId) {
         await GenerateReport(currentMessages, currentDetail, sessionId, callDurationRef.current);
         toast.success('Your Report is Generated!');
-        router.replace('/dashboard');
+        window.location.replace('/dashboard');
       } else {
         console.warn("⚠️ Not generating report: missing messages or sessionDetail");
-        router.replace('/dashboard');
+        window.location.replace('/dashboard');
       }
       setCallStarted(false);
       setLoading(false);
@@ -205,7 +212,7 @@ function MedicalVoiceAgent() {
     vapiInstance.stop();
   };
 
-    const GenerateReport = async (
+  const GenerateReport = async (
     messagesData: Message[],
     sessionData: SessionDetail,
     sessionIdVal: string | string[],
@@ -248,7 +255,7 @@ function MedicalVoiceAgent() {
             {JSON.stringify(sessionDetail, null, 2)}
           </pre>
         )}
-        <Button onClick={() => router.push('/dashboard')} className="mt-5">
+        <Button onClick={() => (window.location.href = '/dashboard')} className="mt-5">
           Go to Dashboard
         </Button>
       </div>
@@ -272,13 +279,12 @@ function MedicalVoiceAgent() {
 
       {/* Doctor Information and Call Controls */}
       <div className="flex items-center flex-col mt-10">
-        <Image
+        <img
           src={sessionDetail.selectedDoctor.image || '/default-doctor.png'}
           alt={sessionDetail.selectedDoctor.specialist || 'Doctor'}
           width={120}
           height={120}
           className="h-[100px] w-[100px] object-cover rounded-full border-2 border-primary"
-          priority
         />
         <h2 className="mt-3 text-2xl font-semibold text-gray-800">{sessionDetail.selectedDoctor.specialist}</h2>
         <p className="text-md text-gray-500">AI Medical Voice Agent</p>
@@ -299,16 +305,16 @@ function MedicalVoiceAgent() {
           ))}
           {liveTranscript && (
             <div className={`mb-2 ${currentRole === 'assistant' ? 'text-left' : 'text-right'}`}>
-               <span className={`inline-block p-2 rounded-lg text-sm ${currentRole === 'assistant' ? 'bg-blue-50 text-blue-600 animate-pulse' : 'bg-green-50 text-green-600 animate-pulse'}`}>
+              <span className={`inline-block p-2 rounded-lg text-sm ${currentRole === 'assistant' ? 'bg-blue-50 text-blue-600 animate-pulse' : 'bg-green-50 text-green-600 animate-pulse'}`}>
                 <span className="font-bold capitalize">{currentRole}:</span> {liveTranscript}...
-               </span>
+              </span>
             </div>
           )}
-            {loading && callStarted && (
-                <div className="text-center text-gray-400 mt-2">
-                 <Loader className="animate-spin inline-block h-4 w-4 mr-2" /> AI Thinking...
-                </div>
-            )}
+          {loading && callStarted && (
+            <div className="text-center text-gray-400 mt-2">
+              <Loader className="animate-spin inline-block h-4 w-4 mr-2" /> AI Thinking...
+            </div>
+          )}
         </div>
 
         {/* Call Action Buttons */}
@@ -329,3 +335,4 @@ function MedicalVoiceAgent() {
 }
 
 export default MedicalVoiceAgent;
+
