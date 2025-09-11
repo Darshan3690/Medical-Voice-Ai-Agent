@@ -118,7 +118,10 @@ function MedicalVoiceAgent() {
     const VapiAgentConfig = { // This config isn't directly used in vapi.start() below, ensure it's for reference or if you intend to pass it.
       name: 'AI Medical Doctor Voice Agent',
       firstMessage: "Hello! I’m your AI medical assistant. Tell me about your symptoms.",
-  transcriber: { provider: 'assemblyai' as 'assemblyai', language: 'en' },
+  transcriber: {
+  provider: 'assemblyai',
+  language: 'en'
+} as { provider: 'assemblyai'; language: string },
       voice: {
         provider: 'playht',
         voiceId: sessionDetail.selectedDoctor.voiceId,
